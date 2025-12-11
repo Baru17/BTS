@@ -426,6 +426,7 @@
 # if __name__ == '__main__':
 #     app.run(debug=True)
 
+
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
 from flask_mysqldb import MySQL
 import MySQLdb.cursors
@@ -434,14 +435,48 @@ from flask_bcrypt import Bcrypt
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
 
-# MySQL configuration
-app.config['MYSQL_HOST'] = 'localhost'
+# ------------------- Railway MySQL CONFIG -------------------
+app.config['MYSQL_HOST'] = 'trolley.proxy.rlwy.net'
 app.config['MYSQL_USER'] = 'root'
-app.config['MYSQL_PASSWORD'] = '@Barani17@'
-app.config['MYSQL_DB'] = 'bus_tracking'
+app.config['MYSQL_PASSWORD'] = 'DwivKXURFWpZapyOyWpXllGihAmuOjjS'
+app.config['MYSQL_DB'] = 'railway'
+app.config['MYSQL_PORT'] = 42579
 
 mysql = MySQL(app)
 bcrypt = Bcrypt(app)
+
+
+# ------------------------------------------------------------
+# AUTO-FIX SQL TABLE (CREATES TABLE + FIXES AUTO_INCREMENT)
+# ------------------------------------------------------------
+def fix_users_table():
+    cursor = mysql.connection.cursor()
+
+    # Create table if missing
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            email VARCHAR(255) NOT NULL UNIQUE,
+            password VARCHAR(255) NOT NULL,
+            bus_number VARCHAR(50) NOT NULL
+        )
+    """)
+
+    # Ensure id is auto increment
+    cursor.execute("""
+        ALTER TABLE users 
+        MODIFY id INT NOT NULL AUTO_INCREMENT;
+    """)
+
+    mysql.connection.commit()
+    cursor.close()
+
+
+# Run auto-fix when app starts
+with app.app_context():
+    fix_users_table()
+
 
 # ------------------- User Registration -------------------
 @app.route('/register', methods=['GET', 'POST'])
@@ -463,6 +498,7 @@ def register():
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         cursor.execute("SELECT * FROM users WHERE email=%s", (email,))
         account = cursor.fetchone()
+
         if account:
             cursor.close()
             error = "Email already registered."
@@ -477,13 +513,15 @@ def register():
             cursor.close()
             flash("Registration successful! Please login.", "success")
             return redirect(url_for('login'))
+
         except Exception as e:
             cursor.close()
             error = f"Database error: {str(e)}"
 
     return render_template('register.html', error=error)
 
-# ------------------- User Login -------------------
+
+# ------------------- Login -------------------
 @app.route('/', methods=['GET', 'POST'])
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -498,10 +536,10 @@ def login():
         cursor.close()
 
         if user and bcrypt.check_password_hash(user['password'], password):
-            # Store user info in session
             session['user_id'] = user['id']
             session['username'] = user['name']
             session['bus_number'] = user['bus_number']
+
             flash("Login successful!", "success")
             return redirect(url_for('home'))
         else:
@@ -509,13 +547,15 @@ def login():
 
     return render_template('index.html', error=error)
 
-# ------------------- Forgot Password -------------------
+
+# ------------------- Forget Password -------------------
 @app.route('/forgetpassword', methods=['GET', 'POST'])
 def forget_password():
     error = ''
     if request.method == 'POST':
         email = request.form['email']
         new_password = request.form['password']
+
         hashed_password = bcrypt.generate_password_hash(new_password).decode('utf-8')
 
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -523,36 +563,44 @@ def forget_password():
         user = cursor.fetchone()
 
         if user:
-            cursor.execute("UPDATE users SET password=%s WHERE email=%s", (hashed_password, email))
+            cursor.execute(
+                "UPDATE users SET password=%s WHERE email=%s",
+                (hashed_password, email)
+            )
             mysql.connection.commit()
             cursor.close()
+
             flash("Password updated successfully! Please login.", "success")
             return redirect(url_for('login'))
         else:
             cursor.close()
             error = "Email not found."
-            return render_template('forgetpassword.html', error=error)
 
-    return render_template('forgetpassword.html')
+    return render_template('forgetpassword.html', error=error)
 
-# ------------------- Home Page -------------------
+
+# ------------------- Home -------------------
 @app.route('/home')
 def home():
     if 'username' not in session:
         flash("Please log in first.", "error")
         return redirect(url_for('login'))
-    return render_template('home.html', username=session['username'], bus_number=session['bus_number'])
 
-# ------------------- Track Your Bus -------------------
+    return render_template('home.html',
+                           username=session['username'],
+                           bus_number=session['bus_number'])
+
+
+# ------------------- Track -------------------
 @app.route('/track')
 def track():
     if 'bus_number' not in session:
         flash("Please log in first.", "error")
         return redirect(url_for('login'))
-    bus_number = session['bus_number']
-    return redirect(url_for('tracking', bus_number=bus_number))
 
-# ------------------- Tracking Page -------------------
+    return redirect(url_for('tracking', bus_number=session['bus_number']))
+
+
 @app.route('/tracking/<int:bus_number>')
 def tracking(bus_number):
     if 'bus_number' not in session:
@@ -560,24 +608,30 @@ def tracking(bus_number):
         return redirect(url_for('login'))
 
     if str(bus_number) != str(session['bus_number']):
-        flash("Access denied for this bus.", "error")
+        flash("You are not allowed to view this bus.", "error")
         return redirect(url_for('home'))
 
     return render_template('tracking.html', bus_number=bus_number)
 
-# ------------------- Admin -------------------
+
+# ------------------- Admin Login Page -------------------
 @app.route('/adminlog')
 def admin_login():
     return render_template('adminlog.html')
 
+
+# ------------------- Admin Dashboard -------------------
 @app.route('/admin.dashboard')
-def admindashboard():
+def admin_dashboard():
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
     cursor.execute("SELECT id, name, email, bus_number FROM users")
     users = cursor.fetchall()
     cursor.close()
+
     return render_template('admin.dashboard.html', users=users)
 
+
+# ------------------- Delete User (AJAX) -------------------
 @app.route('/delete_user/<int:user_id>', methods=['POST'])
 def delete_user(user_id):
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -585,15 +639,16 @@ def delete_user(user_id):
         cursor.execute("DELETE FROM users WHERE id=%s", (user_id,))
         mysql.connection.commit()
         cursor.close()
-        return {"success": True}
+        return jsonify({"success": True})
     except:
         cursor.close()
-        return {"success": False}
+        return jsonify({"success": False})
 
+
+# ------------------- Update User (AJAX) -------------------
 @app.route('/update_user/<int:user_id>', methods=['POST'])
 def update_user(user_id):
     try:
-        # Parse JSON data
         data = request.get_json(force=True)
         name = data.get("name")
         email = data.get("email")
@@ -609,7 +664,6 @@ def update_user(user_id):
         )
         mysql.connection.commit()
 
-        # Check if a row was actually updated
         if cursor.rowcount == 0:
             cursor.close()
             return jsonify({"success": False, "error": "User not found."})
@@ -617,12 +671,8 @@ def update_user(user_id):
         cursor.close()
         return jsonify({"success": True})
 
-    except MySQLdb.Error as e:
-        return jsonify({"success": False, "error": f"MySQL error: {str(e)}"})
-
     except Exception as e:
-        return jsonify({"success": False, "error": f"Server error: {str(e)}"})
-
+        return jsonify({"success": False, "error": str(e)})
 
 
 # ------------------- Other Pages -------------------
@@ -631,24 +681,27 @@ def buses():
     if 'bus_number' not in session:
         flash("Please log in first.", "error")
         return redirect(url_for('login'))
-    bus_number = session['bus_number']
-    return render_template('buses.html', bus_number=bus_number)
+    return render_template('buses.html', bus_number=session['bus_number'])
+
 
 @app.route('/contact')
 def contact():
     return render_template('contact.html')
 
+
 @app.route('/drivers')
 def drivers():
     return render_template('drivers.html')
+
 
 # ------------------- Logout -------------------
 @app.route('/logout')
 def logout():
     session.clear()
-    flash("Logged out successfully.", "success")
+    flash("Logged out successfully!", "success")
     return redirect(url_for('login'))
+
 
 # ------------------- Run App -------------------
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True) 
