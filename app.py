@@ -601,17 +601,39 @@ def track():
     return redirect(url_for('tracking', bus_number=session['bus_number']))
 
 
+# ------------------- Track -------------------
+@app.route('/track')
+def track():
+    if 'bus_number' not in session:
+        flash("Please log in first.", "error")
+        return redirect(url_for('login'))
+
+    return redirect(url_for('tracking', bus_number=session['bus_number']))
+
+
 @app.route('/tracking/<int:bus_number>')
 def tracking(bus_number):
     if 'bus_number' not in session:
         flash("Please log in first.", "error")
         return redirect(url_for('login'))
 
-    if str(bus_number) != str(session['bus_number']):
+    # Registered bus
+    registered_bus = int(session['bus_number'])
+
+    # Allow registered bus OR temporary bus
+    temp_bus = session.get('temp_bus')
+
+    if bus_number != registered_bus and bus_number != temp_bus:
         flash("You are not allowed to view this bus.", "error")
         return redirect(url_for('home'))
 
     return render_template('tracking.html', bus_number=bus_number)
+
+@app.route('/set-temp-bus/<int:bus_number>')
+def set_temp_bus(bus_number):
+    session['temp_bus'] = bus_number
+    return redirect(url_for('tracking', bus_number=bus_number))
+
 
 
 # ------------------- Admin Login Page -------------------
@@ -705,3 +727,4 @@ def logout():
 # ------------------- Run App -------------------
 if __name__ == '__main__':
     app.run(debug=True) 
+
