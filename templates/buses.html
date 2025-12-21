@@ -11,6 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <!-- Include Font Awesome -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" />
+
 </head>
 <body>
 <!-- Navigation -->
@@ -280,6 +281,84 @@ body {
 }
 
 
+.bus-container {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 20px;
+  position: relative;
+  flex-wrap: wrap;
+}
+
+.bus-card {
+  padding: 10px 16px;
+  background: #fff;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+  color: #546E7A;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.other-bus-btn {
+  padding: 10px 16px;
+  background: #00BCD4;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+/* Dropdown FIX */
+.dropdown-wrapper {
+  position: relative;
+}
+
+.bus-dropdown {
+  display: none;
+  position: absolute;
+  top: 110%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 260px;
+  max-height: 280px;
+  overflow-y: auto;
+
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 10px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.2);
+
+  
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  z-index: 999;
+}
+
+.bus-dropdown a {
+  padding: 8px;
+  text-align: center;
+  background: #f5f7fa;
+  border-radius: 6px;
+  text-decoration: none;
+  color: #263238;
+  font-weight: 500;
+}
+
+.bus-dropdown a:hover {
+  background: #00BCD4;
+  color: #fff;
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+  .bus-dropdown {
+    width: 220px;
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 </style>
 
 
@@ -289,18 +368,34 @@ body {
   <h1>Track Your Bus</h1>
   <p>Your registered bus number is displayed below</p>
 </header>
-
 <section class="bus-grid">
   {% if bus_number %}
-    <center>
-      <a style="color: #546E7A; width: 100px;" href="{{ url_for('tracking', bus_number=bus_number) }}" class="bus-card">
-      🚌 Bus {{ bus_number }}
-    </a>
-    </center>
-  {% else %}
-    <p>No bus assigned. Please register your bus number.</p>
+    <div class="bus-container">
+
+      <a href="{{ url_for('tracking', bus_number=bus_number) }}"
+         class="bus-card">
+        🚌 Bus {{ bus_number }}
+      </a>
+
+      <div class="dropdown-wrapper">
+        <button class="other-bus-btn" onclick="toggleDropdown()">
+          🔄 Other Buses
+        </button>
+
+        <div id="busDropdown" class="bus-dropdown">
+          {% for i in range(1, 51) %}
+            <a href="{{ url_for('set_temp_bus', bus_number=i) }}">
+              Bus {{ i }}
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+
+    </div>
   {% endif %}
 </section>
+
+
 
 <script>
   // Hamburger Menu Toggle
@@ -321,6 +416,23 @@ body {
   });
 </script>
 
+
+<script>
+function toggleDropdown() {
+  const drop = document.getElementById("busDropdown");
+  drop.style.display = drop.style.display === "grid" ? "none" : "grid";
+}
+
+// Close when clicking outside
+document.addEventListener("click", function (e) {
+  const dropdown = document.getElementById("busDropdown");
+  const button = document.querySelector(".other-bus-btn");
+
+  if (!dropdown.contains(e.target) && !button.contains(e.target)) {
+    dropdown.style.display = "none";
+  }
+});
+</script>
 
 
 
